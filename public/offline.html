@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Offline - FreshMarket</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
+        'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans',
+        'Helvetica Neue', sans-serif;
+      background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #1f2937;
+    }
+
+    .container {
+      max-width: 400px;
+      width: 100%;
+      padding: 2rem;
+      background: white;
+      border-radius: 1rem;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+      text-align: center;
+    }
+
+    .icon {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 1.5rem;
+      background: #f3f4f6;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.5rem;
+    }
+
+    h1 {
+      font-size: 1.875rem;
+      font-weight: bold;
+      margin-bottom: 0.5rem;
+      color: #1f2937;
+    }
+
+    p {
+      color: #6b7280;
+      line-height: 1.6;
+      margin-bottom: 1.5rem;
+    }
+
+    .features {
+      background: #f9fafb;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      margin-bottom: 1.5rem;
+      text-align: left;
+    }
+
+    .features li {
+      list-style: none;
+      padding: 0.5rem 0;
+      font-size: 0.875rem;
+      color: #4b5563;
+    }
+
+    .features li:before {
+      content: '✓ ';
+      color: #059669;
+      font-weight: bold;
+      margin-right: 0.5rem;
+    }
+
+    button {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      background: #059669;
+      color: white;
+      border: none;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.3s;
+      font-size: 1rem;
+    }
+
+    button:hover {
+      background: #047857;
+    }
+
+    button:active {
+      background: #037854;
+    }
+
+    .indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: #fee2e2;
+      color: #dc2626;
+      border-radius: 9999px;
+      font-size: 0.875rem;
+      margin-bottom: 1rem;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      background: #dc2626;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%,
+      100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.5;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="indicator">
+      <div class="dot"></div>
+      You're offline
+    </div>
+
+    <div class="icon">📡</div>
+
+    <h1>No Connection</h1>
+    <p>
+      It looks like you've lost your internet connection. Don't worry, you can
+      still use the app offline!
+    </p>
+
+    <div class="features">
+      <ul>
+        <li>View cached orders</li>
+        <li>Take collection photos</li>
+        <li>Record GPS locations</li>
+        <li>Sync when back online</li>
+      </ul>
+    </div>
+
+    <button onclick="reload()">Try Reconnecting</button>
+  </div>
+
+  <script>
+    function reload() {
+      location.reload();
+    }
+
+    // Auto-reload when connection is restored
+    window.addEventListener('online', () => {
+      location.reload();
+    });
+  </script>
+</body>
+</html>
