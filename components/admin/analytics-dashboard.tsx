@@ -244,7 +244,7 @@ export default function AdminAnalyticsDashboard({
             {analytics.orders_by_village.slice(0, 5).map((village, idx) => (
               <div key={idx} className="flex items-center justify-between">
                 <div className="flex-1">
-                  <p className="font-medium text-slate-900">{village.name}</p>
+                  <p className="font-medium text-slate-900">{village.village}</p>
                   <p className="text-xs text-slate-600">
                     {village.orders} orders • Revenue: ৳{village.revenue}
                   </p>

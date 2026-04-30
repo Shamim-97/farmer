@@ -27,6 +27,7 @@ export function NotificationPreferences() {
 
   useEffect(() => {
     if (!user) return;
+    const userId = user.id;
 
     async function loadPreferences() {
       try {
@@ -34,11 +35,11 @@ export function NotificationPreferences() {
         const { data, error: fetchError } = await client
           .from('profiles')
           .select('notification_preferences')
-          .eq('id', user.id)
+          .eq('id', userId)
           .single();
 
-        if (!fetchError && data?.notification_preferences) {
-          setPreferences(data.notification_preferences);
+        if (!fetchError && (data as any)?.notification_preferences) {
+          setPreferences((data as any).notification_preferences);
         }
       } catch (err) {
         console.error('Error loading preferences:', err);

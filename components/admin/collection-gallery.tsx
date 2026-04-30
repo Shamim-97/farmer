@@ -2,7 +2,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
-import { Badge, Button, Input } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   ImageIcon,
   MapPin,

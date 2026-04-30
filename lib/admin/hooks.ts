@@ -25,12 +25,13 @@ export function useAdminOrderUpdates(
           table: 'orders',
         },
         (payload) => {
+          const next = payload.new as { status?: string };
           let eventType: RealtimeOrderEvent = 'ORDER_CREATED';
           if (payload.eventType === 'INSERT') eventType = 'ORDER_CREATED';
-          else if (payload.new.status === 'CONFIRMED') eventType = 'ORDER_CONFIRMED';
-          else if (payload.new.status === 'READY') eventType = 'ORDER_READY';
-          else if (payload.new.status === 'COLLECTED') eventType = 'ORDER_COLLECTED';
-          else if (payload.new.status === 'ABANDONED') eventType = 'ORDER_ABANDONED';
+          else if (next.status === 'CONFIRMED') eventType = 'ORDER_CONFIRMED';
+          else if (next.status === 'READY') eventType = 'ORDER_READY';
+          else if (next.status === 'COLLECTED') eventType = 'ORDER_COLLECTED';
+          else if (next.status === 'ABANDONED') eventType = 'ORDER_ABANDONED';
 
           onOrderUpdate(eventType, payload.new);
         }

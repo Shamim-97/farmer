@@ -91,12 +91,23 @@ export interface AdminOrderDetail extends AdminOrderView {
   };
 }
 
-export interface RealtimeOrderEvent {
-  type: 'ORDER_CREATED' | 'ORDER_CONFIRMED' | 'ORDER_READY' | 'ORDER_COLLECTED' | 'ORDER_ABANDONED' | 'ORDER_CANCELLED';
+export type RealtimeOrderEventType =
+  | 'ORDER_CREATED'
+  | 'ORDER_CONFIRMED'
+  | 'ORDER_READY'
+  | 'ORDER_COLLECTED'
+  | 'ORDER_ABANDONED'
+  | 'ORDER_CANCELLED';
+
+export interface RealtimeOrderEventPayload {
+  type: RealtimeOrderEventType;
   order_id: string;
   timestamp: string;
   data: AdminOrderView;
 }
+
+// Back-compat: existing hooks expect the bare event-type string.
+export type RealtimeOrderEvent = RealtimeOrderEventType;
 
 export interface AgentLocationUpdate {
   agent_id: string;

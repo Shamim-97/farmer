@@ -1,20 +1,31 @@
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient as createSsrBrowserClient } from '@supabase/ssr';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from './database.types';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+// NOTE: SupabaseClient is intentionally untyped (no <Database> generic).
+// Postgrest-js's embed inference needs FK relationship metadata that
+// `supabase gen types typescript` produces. Until that lands in CI, leaving
+// the client untyped keeps embed-heavy queries from cascading into TS errors.
+// `database.types.ts` is still exported so call-sites can cast results
+// explicitly via `as unknown as ProfileRow` / etc.
+let browserClient: SupabaseClient | null = null;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-    flowType: 'pkce',
-  },
-  realtime: {
-    params: {
-      eventsPerSecond: 10,
-    },
-  },
-});
+export function createBrowserClient(): SupabaseClient {
+  if (typeof window === 'undefined') {
+    return createSsrBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+  }
+  if (!browserClient) {
+    browserClient = createSsrBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+  }
+  return browserClient;
+}
 
-export type Database = any; // Replace with your generated Supabase types
+export const supabase: SupabaseClient = createBrowserClient();
+
+export type { Database };

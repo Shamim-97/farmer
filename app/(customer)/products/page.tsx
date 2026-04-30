@@ -34,7 +34,7 @@ export default function ProductBrowsePage() {
       );
 
       if (result.success) {
-        setProducts(result.data);
+        setProducts(result.data ?? []);
         setTotal(result.total || 0);
       }
       setLoading(false);

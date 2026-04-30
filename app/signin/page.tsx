@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { signIn } from '@/lib/auth/actions';
 
 export default function SignIn() {
   const [email, setEmail] = useState('');
@@ -17,12 +18,15 @@ export default function SignIn() {
     setLoading(true);
 
     try {
-      // TODO: Integrate with Supabase Auth
-      console.log('Sign in with:', { email, password });
-      // For now, just redirect to customer dashboard for demo
-      router.push('/customer');
+      const result = await signIn(email, password);
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      router.push('/');
+      router.refresh();
     } catch (err) {
-      setError('Failed to sign in. Please try again.');
+      setError(err instanceof Error ? err.message : 'Failed to sign in');
     } finally {
       setLoading(false);
     }

@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server';
+import { isPlaceholderEnv } from '@/lib/env';
 
 /**
  * Middleware to protect admin routes
  * Verifies that user is authenticated and has ADMIN role
  */
 export async function adminMiddleware(request: NextRequest) {
+  if (isPlaceholderEnv()) {
+    return NextResponse.redirect(new URL('/signin', request.url));
+  }
   try {
     // Get auth from supabase
     const client = await createServerClient();

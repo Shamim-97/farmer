@@ -34,3 +34,11 @@ pnpm-debug.log*
 # Misc
 .cache
 *.pem
+
+# Playwright
+test-results
+playwright-report
+playwright/.cache
+
+# TS build cache
+tsconfig.tsbuildinfo

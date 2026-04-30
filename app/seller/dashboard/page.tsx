@@ -20,7 +20,7 @@ export default async function SellerDashboardPage() {
   }
 
   const productsResult = await getSellerProducts();
-  const products = productsResult.success ? productsResult.data : [];
+  const products = (productsResult.success ? productsResult.data : []) ?? [];
 
   const activeProducts = products.filter((p) => p.is_active).length;
   const totalStock = products.reduce((sum, p) => sum + p.stock_kg, 0);

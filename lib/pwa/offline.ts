@@ -20,12 +20,17 @@ export function registerServiceWorker() {
   });
 }
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+
 export function requestInstallPrompt() {
-  let deferredPrompt;
+  let deferredPrompt: BeforeInstallPromptEvent | null = null;
 
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
-    deferredPrompt = e;
+    deferredPrompt = e as BeforeInstallPromptEvent;
   });
 
   return () => {
@@ -62,7 +67,13 @@ export async function getOfflineData(key: string) {
     if ('indexedDB' in window) {
       const db = await openDB('FreshMarketAgent');
       const tx = db.transaction('cache', 'readonly');
-      const result = await tx.objectStore('cache').get(key);
+      const request = tx.objectStore('cache').get(key);
+      const result = await new Promise<{ data?: unknown } | undefined>(
+        (resolve, reject) => {
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        }
+      );
       return result?.data;
     } else {
       const data = localStorage.getItem(`offline-${key}`);
@@ -74,8 +85,8 @@ export async function getOfflineData(key: string) {
   }
 }
 
-function openDB(dbName: string) {
-  return new Promise((resolve, reject) => {
+function openDB(dbName: string): Promise<IDBDatabase> {
+  return new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(dbName, 1);
 
     request.onerror = () => reject(request.error);

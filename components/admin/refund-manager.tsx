@@ -2,7 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
-import { Badge, Button, Input } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Clock,
   CheckCircle,
@@ -32,12 +34,12 @@ export default function AdminRefundManager() {
   const fetchRefunds = async (status?: RefundStatus | '') => {
     setLoading(true);
     try {
-      const result = await getAdminRefunds(status && status !== '' ? (status as RefundStatus) : undefined);
+      const result = await getAdminRefunds(status ? (status as RefundStatus) : undefined);
       if (result.success) {
-        setRefunds(result.data);
+        setRefunds(result.data ?? []);
         setError(null);
       } else {
-        setError(result.error);
+        setError(result.error ?? null);
       }
     } catch (err) {
       setError('Failed to fetch refund requests');
@@ -63,7 +65,7 @@ export default function AdminRefundManager() {
         );
         setSelectedRefund(null);
       } else {
-        setError(result.error);
+        setError(result.error ?? null);
       }
     } catch (err) {
       setError('Failed to approve refund');
@@ -91,7 +93,7 @@ export default function AdminRefundManager() {
         setSelectedRefund(null);
         setRejectionReason('');
       } else {
-        setError(result.error);
+        setError(result.error ?? null);
       }
     } catch (err) {
       setError('Failed to reject refund');
@@ -113,7 +115,7 @@ export default function AdminRefundManager() {
         );
         setSelectedRefund(null);
       } else {
-        setError(result.error);
+        setError(result.error ?? null);
       }
     } catch (err) {
       setError('Failed to process refund');

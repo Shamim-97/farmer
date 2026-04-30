@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 
 export const metadata: Metadata = {
   title: 'Pickup Agent - FreshMarket BD',
@@ -8,14 +8,15 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
     title: 'FreshMarket',
   },
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    minimumScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-  },
   manifest: '/manifest.json',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  minimumScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function AgentLayout({

@@ -1,18 +1,23 @@
 'use server';
 
-import { createServerClient, supabaseAdmin } from '@/lib/supabase/server';
+import { createServerClient } from '@/lib/supabase/server';
 import { getCurrentUser } from '@/lib/auth/actions';
-import { AgentOrder, AgentEarnings, PickupAgentSession } from '@/lib/types/pickup-agent';
+import { ok, err, type Result } from '@/lib/types/result';
+import { AgentOrder, AgentEarnings } from '@/lib/types/pickup-agent';
+
+interface AgentProfile {
+  agent_id: string;
+  name: string | null;
+  phone: string;
+  pickup_point: unknown;
+}
 
 /**
  * Get pickup agent profile
  */
-export async function getPickupAgentProfile() {
+export async function getPickupAgentProfile(): Promise<Result<AgentProfile>> {
   const user = await getCurrentUser();
-
-  if (!user) {
-    return { success: false, error: 'Not authenticated' };
-  }
+  if (!user) return err('Not authenticated');
 
   const client = await createServerClient();
 
@@ -23,52 +28,41 @@ export async function getPickupAgentProfile() {
     .eq('role', 'PICKUP_AGENT')
     .single();
 
-  if (error || !agent) {
-    return { success: false, error: 'Pickup agent not found' };
-  }
+  if (error || !agent) return err('Pickup agent not found');
 
-  // Get assigned pickup point
   const { data: point } = await client
     .from('pickup_points')
     .select('id, name, gps_lat, gps_lng, village_id')
     .eq('agent_id', user.id)
     .single();
 
-  return {
-    success: true,
-    data: {
-      agent_id: agent.id,
-      name: agent.full_name,
-      phone: agent.phone,
-      pickup_point: point,
-    },
-  };
+  return ok({
+    agent_id: agent.id,
+    name: agent.full_name,
+    phone: agent.phone,
+    pickup_point: point,
+  });
 }
 
 /**
  * Get orders ready for pickup at agent's point
  */
-export async function getPickupPointOrders(pickupPointId: string) {
+export async function getPickupPointOrders(
+  pickupPointId: string
+): Promise<Result<AgentOrder[]>> {
   const user = await getCurrentUser();
-
-  if (!user) {
-    return { success: false, error: 'Not authenticated' };
-  }
+  if (!user) return err('Not authenticated');
 
   const client = await createServerClient();
 
-  // Verify agent is assigned to this pickup point
   const { data: point, error: pointError } = await client
     .from('pickup_points')
     .select('agent_id')
     .eq('id', pickupPointId)
     .single();
 
-  if (pointError || point?.agent_id !== user.id) {
-    return { success: false, error: 'Unauthorized' };
-  }
+  if (pointError || point?.agent_id !== user.id) return err('Unauthorized');
 
-  // Get READY orders for this pickup point
   const { data: orders, error } = await client
     .from('orders')
     .select(
@@ -84,13 +78,10 @@ export async function getPickupPointOrders(pickupPointId: string) {
 
   if (error) {
     console.error('Error fetching orders:', error);
-    return { success: false, error: 'Failed to fetch orders' };
+    return err('Failed to fetch orders');
   }
 
-  return {
-    success: true,
-    data: (orders || []) as AgentOrder[],
-  };
+  return ok((orders ?? []) as unknown as AgentOrder[]);
 }
 
 /**
@@ -100,43 +91,30 @@ export async function collectOrder(
   orderId: string,
   gpsLat: number,
   gpsLng: number,
-  photoPath: string // path to uploaded photo in storage
-) {
+  photoPath: string
+): Promise<Result<unknown>> {
   const user = await getCurrentUser();
-
-  if (!user) {
-    return { success: false, error: 'Not authenticated' };
-  }
+  if (!user) return err('Not authenticated');
 
   const client = await createServerClient();
 
-  // Get order to verify status
   const { data: order, error: orderError } = await client
     .from('orders')
     .select('id, pickup_point_id, status')
     .eq('id', orderId)
     .single();
 
-  if (orderError || !order) {
-    return { success: false, error: 'Order not found' };
-  }
+  if (orderError || !order) return err('Order not found');
+  if (order.status !== 'READY') return err('Order is not ready for collection');
 
-  if (order.status !== 'READY') {
-    return { success: false, error: 'Order is not ready for collection' };
-  }
-
-  // Verify agent is assigned to pickup point
   const { data: point, error: pointError } = await client
     .from('pickup_points')
     .select('agent_id')
     .eq('id', order.pickup_point_id)
     .single();
 
-  if (pointError || point?.agent_id !== user.id) {
-    return { success: false, error: 'Unauthorized' };
-  }
+  if (pointError || point?.agent_id !== user.id) return err('Unauthorized');
 
-  // Update order status
   const { data: updated, error: updateError } = await client
     .from('orders')
     .update({
@@ -149,10 +127,9 @@ export async function collectOrder(
 
   if (updateError) {
     console.error('Update error:', updateError);
-    return { success: false, error: 'Failed to collect order' };
+    return err('Failed to collect order');
   }
 
-  // Store collection proof
   const { error: proofError } = await client
     .from('collection_proofs')
     .insert({
@@ -166,12 +143,9 @@ export async function collectOrder(
 
   if (proofError) {
     console.error('Proof storage error:', proofError);
-    // Still return success as order was collected
   }
 
-  // Update agent's session statistics
-  const now = new Date();
-  const today = now.toISOString().split('T')[0];
+  const today = new Date().toISOString().split('T')[0];
 
   const { data: session } = await client
     .from('pickup_agent_sessions')
@@ -182,39 +156,28 @@ export async function collectOrder(
     .single();
 
   if (session) {
+    const { count } = await client
+      .from('orders')
+      .select('id', { count: 'exact' })
+      .eq('pickup_point_id', order.pickup_point_id)
+      .eq('status', 'COLLECTED')
+      .gte('collected_at', `${today}T00:00:00`);
+
     await client
       .from('pickup_agent_sessions')
-      .update({
-        orders_collected: (await client
-          .from('orders')
-          .select('id', { count: 'exact' })
-          .eq('pickup_point_id', order.pickup_point_id)
-          .eq('status', 'COLLECTED')
-          .gte('collected_at', `${today}T00:00:00`)).count || 0,
-      })
+      .update({ orders_collected: count ?? 0 })
       .eq('id', session.id);
   }
 
-  return {
-    success: true,
-    data: updated,
-    message: 'Order collected successfully',
-  };
+  return ok(updated);
 }
 
 /**
  * Get agent's earnings for today/week/month
  */
-export async function getAgentEarnings(): Promise<{
-  success: boolean;
-  error?: string;
-  data?: AgentEarnings;
-}> {
+export async function getAgentEarnings(): Promise<Result<AgentEarnings>> {
   const user = await getCurrentUser();
-
-  if (!user) {
-    return { success: false, error: 'Not authenticated' };
-  }
+  if (!user) return err('Not authenticated');
 
   const client = await createServerClient();
   const now = new Date();
@@ -226,7 +189,6 @@ export async function getAgentEarnings(): Promise<{
     .toISOString()
     .split('T')[0];
 
-  // Get today's collections
   const { data: todayOrders, count: todayCount } = await client
     .from('orders')
     .select('delivery_fee', { count: 'exact' })
@@ -234,11 +196,10 @@ export async function getAgentEarnings(): Promise<{
     .gte('collected_at', `${today}T00:00:00`)
     .lte('collected_at', `${today}T23:59:59`);
 
+  const typedTodayOrders = (todayOrders ?? []) as Array<{ delivery_fee: number | null }>;
   const todayEarnings =
-    (todayOrders?.reduce((sum, o) => sum + (o.delivery_fee || 0), 0) || 0) *
-    0.3; // Agent gets 30% of delivery fee
+    typedTodayOrders.reduce((sum, o) => sum + (o.delivery_fee ?? 0), 0) * 0.3;
 
-  // Get week's collections
   const { count: weekCount } = await client
     .from('orders')
     .select('id', { count: 'exact' })
@@ -246,7 +207,6 @@ export async function getAgentEarnings(): Promise<{
     .gte('collected_at', `${weekAgo}T00:00:00`)
     .lte('collected_at', `${today}T23:59:59`);
 
-  // Get month's collections
   const { count: monthCount } = await client
     .from('orders')
     .select('id', { count: 'exact' })
@@ -254,7 +214,6 @@ export async function getAgentEarnings(): Promise<{
     .gte('collected_at', `${monthAgo}T00:00:00`)
     .lte('collected_at', `${today}T23:59:59`);
 
-  // Get last collection
   const { data: lastCollection } = await client
     .from('orders')
     .select('collected_at')
@@ -263,43 +222,37 @@ export async function getAgentEarnings(): Promise<{
     .limit(1)
     .single();
 
-  return {
-    success: true,
-    data: {
-      total_today: todayEarnings,
-      collections_today: todayCount || 0,
-      avg_per_order: todayCount ? (todayEarnings / todayCount).toFixed(2) : '0',
-      total_week: weekCount || 0,
-      total_month: monthCount || 0,
-      last_collection: lastCollection?.collected_at,
-    },
-  };
+  return ok({
+    total_today: todayEarnings,
+    collections_today: todayCount ?? 0,
+    avg_per_order: todayCount
+      ? Number((todayEarnings / todayCount).toFixed(2))
+      : 0,
+    total_week: weekCount ?? 0,
+    total_month: monthCount ?? 0,
+    last_collection: lastCollection?.collected_at,
+  } as AgentEarnings);
 }
 
 /**
  * Start duty session
  */
-export async function startDutySession(pickupPointId: string) {
+export async function startDutySession(
+  pickupPointId: string
+): Promise<Result<unknown>> {
   const user = await getCurrentUser();
-
-  if (!user) {
-    return { success: false, error: 'Not authenticated' };
-  }
+  if (!user) return err('Not authenticated');
 
   const client = await createServerClient();
 
-  // Verify agent is assigned to this pickup point
   const { data: point, error: pointError } = await client
     .from('pickup_points')
     .select('agent_id')
     .eq('id', pickupPointId)
     .single();
 
-  if (pointError || point?.agent_id !== user.id) {
-    return { success: false, error: 'Unauthorized' };
-  }
+  if (pointError || point?.agent_id !== user.id) return err('Unauthorized');
 
-  // Create session
   const { data: session, error } = await client
     .from('pickup_agent_sessions')
     .insert({
@@ -315,21 +268,20 @@ export async function startDutySession(pickupPointId: string) {
 
   if (error) {
     console.error('Session creation error:', error);
-    return { success: false, error: 'Failed to start duty session' };
+    return err('Failed to start duty session');
   }
 
-  return { success: true, data: session };
+  return ok(session);
 }
 
 /**
  * End duty session
  */
-export async function endDutySession(sessionId: string) {
+export async function endDutySession(
+  sessionId: string
+): Promise<Result<unknown>> {
   const user = await getCurrentUser();
-
-  if (!user) {
-    return { success: false, error: 'Not authenticated' };
-  }
+  if (!user) return err('Not authenticated');
 
   const client = await createServerClient();
 
@@ -339,9 +291,7 @@ export async function endDutySession(sessionId: string) {
     .eq('id', sessionId)
     .single();
 
-  if (sessionError || session?.agent_id !== user.id) {
-    return { success: false, error: 'Unauthorized' };
-  }
+  if (sessionError || session?.agent_id !== user.id) return err('Unauthorized');
 
   const { data: updated, error } = await client
     .from('pickup_agent_sessions')
@@ -355,10 +305,10 @@ export async function endDutySession(sessionId: string) {
 
   if (error) {
     console.error('End session error:', error);
-    return { success: false, error: 'Failed to end duty session' };
+    return err('Failed to end duty session');
   }
 
-  return { success: true, data: updated };
+  return ok(updated);
 }
 
 /**
@@ -368,12 +318,9 @@ export async function updateAgentLocation(
   sessionId: string,
   lat: number,
   lng: number
-) {
+): Promise<Result<void>> {
   const user = await getCurrentUser();
-
-  if (!user) {
-    return { success: false, error: 'Not authenticated' };
-  }
+  if (!user) return err('Not authenticated');
 
   const client = await createServerClient();
 
@@ -383,22 +330,17 @@ export async function updateAgentLocation(
     .eq('id', sessionId)
     .single();
 
-  if (sessionError || session?.agent_id !== user.id) {
-    return { success: false, error: 'Unauthorized' };
-  }
+  if (sessionError || session?.agent_id !== user.id) return err('Unauthorized');
 
   const { error } = await client
     .from('pickup_agent_sessions')
-    .update({
-      gps_lat: lat,
-      gps_lng: lng,
-    })
+    .update({ gps_lat: lat, gps_lng: lng })
     .eq('id', sessionId);
 
   if (error) {
     console.error('Location update error:', error);
-    return { success: false, error: 'Failed to update location' };
+    return err('Failed to update location');
   }
 
-  return { success: true };
+  return ok(undefined);
 }

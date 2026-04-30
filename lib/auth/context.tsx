@@ -20,14 +20,27 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+export function AuthProvider({
+  children,
+  initialUser = null,
+  initialProfile = null,
+}: {
+  children: React.ReactNode;
+  initialUser?: User | null;
+  initialProfile?: UserProfile | null;
+}) {
+  const [user, setUser] = useState<User | null>(initialUser);
+  const [profile, setProfile] = useState<UserProfile | null>(initialProfile);
+  const [loading, setLoading] = useState(initialUser === null);
   const [error, setError] = useState<string | null>(null);
 
-  // Initialize auth state on mount
   useEffect(() => {
+    // Server already provided both — skip initial fetch.
+    if (initialUser !== null) {
+      setLoading(false);
+      return;
+    }
+
     const initializeAuth = async () => {
       try {
         const {
@@ -37,7 +50,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(user);
 
         if (user) {
-          // Fetch user profile
           const { data, error: profileError } = await supabase
             .from('profiles')
             .select('*')
@@ -82,6 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => subscription?.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const signIn = async (email: string, password: string) => {

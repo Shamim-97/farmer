@@ -2,7 +2,9 @@
 
 import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
-import { Badge, Button, Input } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   AlertCircle,
   Upload,
@@ -87,7 +89,7 @@ export default function RefundRequestForm({
         setStage('success');
         onSuccess?.();
       } else {
-        setError(result.error);
+        setError(result.error ?? null);
       }
     } catch (err) {
       setError('Failed to submit refund request');

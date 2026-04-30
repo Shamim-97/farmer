@@ -1,10 +1,10 @@
-const CACHE_NAME = 'freshmarket-v1';
+const CACHE_NAME = 'freshmarket-v2';
 const urlsToCache = [
   '/',
   '/agent',
   '/offline.html',
   '/manifest.json',
-  '/icon-192.png',
+  '/pwa/icon.svg',
 ];
 
 // Install event - cache resources
@@ -158,7 +158,7 @@ function openIndexedDB() {
     };
 
     request.onupgradeneeded = (event) => {
-      const db = (event.target as IDBOpenDBRequest).result;
+      const db = event.target.result;
       if (!db.objectStoreNames.contains('pendingUploads')) {
         db.createObjectStore('pendingUploads', { keyPath: 'id' });
       }

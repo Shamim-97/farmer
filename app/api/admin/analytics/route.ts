@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
       .gte('created_at', `${today}T00:00:00`)
       .lte('created_at', `${today}T23:59:59`);
 
-    const ordersByStatus = {
+    const ordersByStatus: Record<string, number> = {
       PENDING: 0,
       CONFIRMED: 0,
       READY: 0,

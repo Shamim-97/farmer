@@ -10,6 +10,14 @@ import {
   RefundStatus,
   RefundReason,
 } from '@/lib/types/refund';
+import type { RefundWithOrder, RefundWithProfile } from '@/lib/types/db-views';
+import {
+  ok,
+  err,
+  okPaginated,
+  type Result,
+  type PaginatedResult,
+} from '@/lib/types/result';
 import {
   notifyRefundStatusChange,
 } from '@/lib/notifications/actions';
@@ -26,7 +34,7 @@ export async function requestRefund(
   const user = await getCurrentUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' };
+    return err('Not authenticated');
   }
 
   try {
@@ -41,7 +49,7 @@ export async function requestRefund(
       .single();
 
     if (orderError || !order) {
-      return { success: false, error: 'Order not found' };
+      return err('Order not found');
     }
 
     // Only allow refunds for collected orders within 7 days
@@ -57,12 +65,12 @@ export async function requestRefund(
       );
 
       if (daysSinceOrder > 7) {
-        return { success: false, error: 'Refund request period expired (7 days)' };
+        return err('Refund request period expired (7 days)');
       }
     }
 
     if (order.status !== 'COLLECTED') {
-      return { success: false, error: 'Only collected orders can be refunded' };
+      return err('Only collected orders can be refunded');
     }
 
     // Check if refund already exists for this order
@@ -73,7 +81,7 @@ export async function requestRefund(
       .maybeSingle();
 
     if (existingRefund) {
-      return { success: false, error: 'Refund already requested for this order' };
+      return err('Refund already requested for this order');
     }
 
     // Create refund request
@@ -95,13 +103,13 @@ export async function requestRefund(
 
     if (refundError) {
       console.error('Error creating refund request:', refundError);
-      return { success: false, error: 'Failed to create refund request' };
+      return err('Failed to create refund request');
     }
 
-    return { success: true, data: refund };
-  } catch (err) {
-    console.error('Error requesting refund:', err);
-    return { success: false, error: 'Internal server error' };
+    return ok(refund as RefundRequest);
+  } catch (e) {
+    console.error('Error requesting refund:', e);
+    return err('Internal server error');
   }
 }
 
@@ -112,7 +120,7 @@ export async function getCustomerRefunds() {
   const user = await getCurrentUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' };
+    return err('Not authenticated');
   }
 
   try {
@@ -148,19 +156,20 @@ export async function getCustomerRefunds() {
 
     if (error) {
       console.error('Error fetching refunds:', error);
-      return { success: false, error: 'Failed to fetch refund requests' };
+      return err('Failed to fetch refund requests');
     }
 
-    const formatted = (refunds || []).map((r) => ({
+    const typedRefunds = (refunds ?? []) as unknown as RefundWithOrder[];
+    const formatted = typedRefunds.map((r) => ({
       ...r,
-      customer_name: r.order?.customer?.full_name || 'Unknown',
-      customer_phone: r.order?.customer?.phone || 'N/A',
-    })) as RefundRequestWithDetails[];
+      customer_name: r.order?.customer?.full_name ?? 'Unknown',
+      customer_phone: r.order?.customer?.phone ?? 'N/A',
+    })) as unknown as RefundRequestWithDetails[];
 
-    return { success: true, data: formatted };
-  } catch (err) {
-    console.error('Error getting customer refunds:', err);
-    return { success: false, error: 'Internal server error' };
+    return ok(formatted);
+  } catch (e) {
+    console.error('Error getting customer refunds:', e);
+    return err('Internal server error');
   }
 }
 
@@ -171,7 +180,7 @@ export async function getRefundDetail(refundId: string) {
   const user = await getCurrentUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' };
+    return err('Not authenticated');
   }
 
   try {
@@ -197,7 +206,7 @@ export async function getRefundDetail(refundId: string) {
       .single();
 
     if (error || !refund) {
-      return { success: false, error: 'Refund request not found' };
+      return err('Refund request not found');
     }
 
     const formatted = {
@@ -207,10 +216,10 @@ export async function getRefundDetail(refundId: string) {
       customer_email: refund.order?.customer?.email,
     } as AdminRefundDetail;
 
-    return { success: true, data: formatted };
-  } catch (err) {
-    console.error('Error getting refund detail:', err);
-    return { success: false, error: 'Internal server error' };
+    return ok(formatted);
+  } catch (e) {
+    console.error('Error getting refund detail:', e);
+    return err('Internal server error');
   }
 }
 
@@ -225,7 +234,7 @@ export async function getAdminRefunds(
   const user = await getCurrentUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' };
+    return err('Not authenticated');
   }
 
   try {
@@ -239,7 +248,7 @@ export async function getAdminRefunds(
       .single();
 
     if (profile?.role !== 'ADMIN') {
-      return { success: false, error: 'Admin access required' };
+      return err('Admin access required');
     }
 
     let query = client
@@ -276,31 +285,33 @@ export async function getAdminRefunds(
 
     if (error) {
       console.error('Error fetching admin refunds:', error);
-      return { success: false, error: 'Failed to fetch refund requests' };
+      return err('Failed to fetch refund requests');
     }
 
-    const formatted = (refunds || []).map((r) => {
+    type RefundForAdmin = RefundWithOrder & { requested_at: string; amount: number };
+    const typedRefunds = (refunds ?? []) as unknown as RefundForAdmin[];
+    const formatted: AdminRefundView[] = typedRefunds.map((r) => {
       const daysAgo = Math.floor(
         (Date.now() - new Date(r.requested_at).getTime()) / (1000 * 60 * 60 * 24)
       );
       return {
         id: r.id,
         order_id: r.order_id,
-        customer_name: r.order?.customer?.full_name || 'Unknown',
-        customer_phone: r.order?.customer?.phone || 'N/A',
-        product_name: r.order?.product?.name_en || 'Product',
+        customer_name: r.order?.customer?.full_name ?? 'Unknown',
+        customer_phone: r.order?.customer?.phone ?? 'N/A',
+        product_name: r.order?.product?.name_en ?? 'Product',
         amount: r.amount,
-        reason: r.reason,
-        status: r.status,
+        reason: r.reason as RefundReason,
+        status: r.status as RefundStatus,
         requested_at: r.requested_at,
         days_since_request: daysAgo,
       };
-    }) as AdminRefundView[];
+    });
 
-    return { success: true, data: formatted, total: count || 0 };
-  } catch (err) {
-    console.error('Error getting admin refunds:', err);
-    return { success: false, error: 'Internal server error' };
+    return okPaginated(formatted, count ?? 0);
+  } catch (e) {
+    console.error('Error getting admin refunds:', e);
+    return err('Internal server error');
   }
 }
 
@@ -311,7 +322,7 @@ export async function approveRefund(refundId: string) {
   const user = await getCurrentUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' };
+    return err('Not authenticated');
   }
 
   try {
@@ -325,16 +336,16 @@ export async function approveRefund(refundId: string) {
       .single();
 
     if (profile?.role !== 'ADMIN') {
-      return { success: false, error: 'Admin access required' };
+      return err('Admin access required');
     }
 
     // Get refund with customer info before updating
-    const { data: refundData } = await client
+    const { data: refundDataRaw } = await client
       .from('refund_requests')
       .select(
         `
-        id, 
-        customer_id, 
+        id,
+        customer_id,
         amount,
         order_id,
         profiles!refund_requests_customer_id_fkey (phone)
@@ -342,6 +353,7 @@ export async function approveRefund(refundId: string) {
       )
       .eq('id', refundId)
       .single();
+    const refundData = refundDataRaw as unknown as RefundWithProfile | null;
 
     // Update refund status
     const { data: refund, error } = await client
@@ -358,11 +370,11 @@ export async function approveRefund(refundId: string) {
 
     if (error) {
       console.error('Error approving refund:', error);
-      return { success: false, error: 'Failed to approve refund' };
+      return err('Failed to approve refund');
     }
 
     // Send notification (non-blocking) if customer phone available
-    if (refundData?.customer_id && refundData?.profiles?.phone) {
+    if (refundData?.customer_id && refundData.profiles?.phone) {
       try {
         await notifyRefundStatusChange(
           refundId,
@@ -371,16 +383,16 @@ export async function approveRefund(refundId: string) {
           refundData.amount,
           `Your refund has been approved`
         );
-      } catch (err) {
-        console.error('Error sending notification:', err);
+      } catch (e) {
+        console.error('Error sending notification:', e);
         // Don't fail the approval if notification fails
       }
     }
 
-    return { success: true, data: refund };
-  } catch (err) {
-    console.error('Error approving refund:', err);
-    return { success: false, error: 'Internal server error' };
+    return ok(refund as RefundRequest);
+  } catch (e) {
+    console.error('Error approving refund:', e);
+    return err('Internal server error');
   }
 }
 
@@ -391,7 +403,7 @@ export async function rejectRefund(refundId: string, rejectionReason: string) {
   const user = await getCurrentUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' };
+    return err('Not authenticated');
   }
 
   try {
@@ -405,22 +417,23 @@ export async function rejectRefund(refundId: string, rejectionReason: string) {
       .single();
 
     if (profile?.role !== 'ADMIN') {
-      return { success: false, error: 'Admin access required' };
+      return err('Admin access required');
     }
 
     // Get refund with customer info before updating
-    const { data: refundData } = await client
+    const { data: refundDataRaw } = await client
       .from('refund_requests')
       .select(
         `
-        id, 
-        customer_id, 
+        id,
+        customer_id,
         amount,
         profiles!refund_requests_customer_id_fkey (phone)
       `
       )
       .eq('id', refundId)
       .single();
+    const refundData = refundDataRaw as unknown as RefundWithProfile | null;
 
     // Update refund status
     const { data: refund, error } = await client
@@ -438,11 +451,11 @@ export async function rejectRefund(refundId: string, rejectionReason: string) {
 
     if (error) {
       console.error('Error rejecting refund:', error);
-      return { success: false, error: 'Failed to reject refund' };
+      return err('Failed to reject refund');
     }
 
     // Send notification (non-blocking) if customer phone available
-    if (refundData?.customer_id && refundData?.profiles?.phone) {
+    if (refundData?.customer_id && refundData.profiles?.phone) {
       try {
         await notifyRefundStatusChange(
           refundId,
@@ -451,16 +464,16 @@ export async function rejectRefund(refundId: string, rejectionReason: string) {
           refundData.amount,
           rejectionReason
         );
-      } catch (err) {
-        console.error('Error sending notification:', err);
+      } catch (e) {
+        console.error('Error sending notification:', e);
         // Don't fail the rejection if notification fails
       }
     }
 
-    return { success: true, data: refund };
-  } catch (err) {
-    console.error('Error rejecting refund:', err);
-    return { success: false, error: 'Internal server error' };
+    return ok(refund as RefundRequest);
+  } catch (e) {
+    console.error('Error rejecting refund:', e);
+    return err('Internal server error');
   }
 }
 
@@ -472,7 +485,7 @@ export async function processRefund(refundId: string, transactionId?: string) {
   const user = await getCurrentUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' };
+    return err('Not authenticated');
   }
 
   try {
@@ -486,7 +499,7 @@ export async function processRefund(refundId: string, transactionId?: string) {
       .single();
 
     if (profile?.role !== 'ADMIN') {
-      return { success: false, error: 'Admin access required' };
+      return err('Admin access required');
     }
 
     // Get refund
@@ -497,11 +510,11 @@ export async function processRefund(refundId: string, transactionId?: string) {
       .single();
 
     if (fetchError || !refund) {
-      return { success: false, error: 'Refund request not found' };
+      return err('Refund request not found');
     }
 
     if (refund.status !== RefundStatus.APPROVED) {
-      return { success: false, error: 'Refund must be approved before processing' };
+      return err('Refund must be approved before processing');
     }
 
     // TODO: Integration with payment gateway (Stripe, SSLCommerz, etc.)
@@ -523,13 +536,13 @@ export async function processRefund(refundId: string, transactionId?: string) {
 
     if (error) {
       console.error('Error processing refund:', error);
-      return { success: false, error: 'Failed to process refund' };
+      return err('Failed to process refund');
     }
 
-    return { success: true, data: updated };
-  } catch (err) {
-    console.error('Error processing refund:', err);
-    return { success: false, error: 'Internal server error' };
+    return ok(updated as RefundRequest);
+  } catch (e) {
+    console.error('Error processing refund:', e);
+    return err('Internal server error');
   }
 }
 
@@ -540,7 +553,7 @@ export async function cancelRefund(refundId: string) {
   const user = await getCurrentUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' };
+    return err('Not authenticated');
   }
 
   try {
@@ -554,7 +567,7 @@ export async function cancelRefund(refundId: string) {
       .single();
 
     if (profile?.role !== 'ADMIN') {
-      return { success: false, error: 'Admin access required' };
+      return err('Admin access required');
     }
 
     // Update refund status
@@ -570,12 +583,12 @@ export async function cancelRefund(refundId: string) {
 
     if (error) {
       console.error('Error cancelling refund:', error);
-      return { success: false, error: 'Failed to cancel refund' };
+      return err('Failed to cancel refund');
     }
 
-    return { success: true, data: refund };
-  } catch (err) {
-    console.error('Error cancelling refund:', err);
-    return { success: false, error: 'Internal server error' };
+    return ok(refund as RefundRequest);
+  } catch (e) {
+    console.error('Error cancelling refund:', e);
+    return err('Internal server error');
   }
 }

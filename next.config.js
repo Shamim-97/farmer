@@ -10,29 +10,19 @@ const nextConfig = {
     ],
     unoptimized: process.env.NODE_ENV === 'development',
   },
-  // PWA configuration
   headers: async () => {
     return [
       {
-        source: '/sw.js',
+        source: '/service-worker.js',
         headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=0, must-revalidate',
-          },
-          {
-            key: 'Service-Worker-Allowed',
-            value: '/',
-          },
+          { key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' },
+          { key: 'Service-Worker-Allowed', value: '/' },
         ],
       },
       {
         source: '/manifest.json',
         headers: [
-          {
-            key: 'Content-Type',
-            value: 'application/manifest+json',
-          },
+          { key: 'Content-Type', value: 'application/manifest+json' },
         ],
       },
     ];

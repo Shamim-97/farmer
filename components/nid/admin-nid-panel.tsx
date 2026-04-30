@@ -37,7 +37,7 @@ export function AdminNIDApprovalDashboard() {
     setLoading(true);
     const result = await getPendingNIDApprovals();
     if (result.success && result.data) {
-      setPendingNIDs(result.data);
+      setPendingNIDs(result.data as NIDApprovalRequest[]);
     }
     setLoading(false);
   };

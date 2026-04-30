@@ -6,105 +6,16 @@
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "theme_color": "#0f172a",
+  "theme_color": "#059669",
   "background_color": "#ffffff",
   "categories": ["shopping", "productivity"],
-  "screenshots": [
-    {
-      "src": "/pwa/screenshot-mobile.png",
-      "sizes": "540x720",
-      "form_factor": "narrow",
-      "type": "image/png"
-    },
-    {
-      "src": "/pwa/screenshot-tablet.png",
-      "sizes": "1280x800",
-      "form_factor": "wide",
-      "type": "image/png"
-    }
-  ],
   "icons": [
     {
-      "src": "/pwa/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/pwa/icon-192-maskable.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/pwa/icon-256.png",
-      "sizes": "256x256",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/pwa/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/pwa/icon-512-maskable.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
+      "src": "/pwa/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     }
   ],
-  "shortcuts": [
-    {
-      "name": "Place Order",
-      "short_name": "Order",
-      "description": "Quickly place a new order",
-      "url": "/customer/orders/new",
-      "icons": [
-        {
-          "src": "/pwa/shortcut-order.png",
-          "sizes": "192x192",
-          "type": "image/png"
-        }
-      ]
-    },
-    {
-      "name": "My Orders",
-      "short_name": "Orders",
-      "description": "View your order history",
-      "url": "/customer/orders",
-      "icons": [
-        {
-          "src": "/pwa/shortcut-orders.png",
-          "sizes": "192x192",
-          "type": "image/png"
-        }
-      ]
-    },
-    {
-      "name": "Browse Products",
-      "short_name": "Products",
-      "description": "Browse fresh products",
-      "url": "/customer/products",
-      "icons": [
-        {
-          "src": "/pwa/shortcut-products.png",
-          "sizes": "192x192",
-          "type": "image/png"
-        }
-      ]
-    }
-  ],
-  "share_target": {
-    "action": "/share",
-    "method": "POST",
-    "enctype": "multipart/form-data",
-    "params": {
-      "title": "title",
-      "text": "text",
-      "url": "url"
-    }
-  },
   "prefer_related_applications": false
 }

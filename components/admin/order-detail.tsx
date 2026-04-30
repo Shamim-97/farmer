@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
-import { Badge, Button } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { ArrowLeft, MapPin, Phone, Package, Clock, CheckCircle } from 'lucide-react';
 import { AdminOrderDetail as AdminOrderDetailType } from '@/lib/types/admin';
 import { getAdminOrderDetail } from '@/lib/admin/actions';
@@ -32,10 +33,10 @@ export default function AdminOrderDetail({ orderId, onBack }: AdminOrderDetailPr
       try {
         const result = await getAdminOrderDetail(orderId);
         if (result.success) {
-          setOrder(result.data);
+          setOrder(result.data ?? null);
           setError(null);
         } else {
-          setError(result.error);
+          setError(result.error ?? null);
         }
       } catch (err) {
         setError('Failed to fetch order details');

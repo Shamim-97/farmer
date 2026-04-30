@@ -10,6 +10,14 @@ import {
   PlaceOrderResponse,
   VillageThresholdInfo,
 } from '@/lib/types/order';
+import type { OrderWithPickupPoint } from '@/lib/types/db-views';
+import {
+  ok,
+  err,
+  okPaginated,
+  type Result,
+  type PaginatedResult,
+} from '@/lib/types/result';
 import {
   notifyOrderStatusChange,
 } from '@/lib/notifications/actions';
@@ -25,12 +33,12 @@ export async function placeOrder(
   const user = await getCurrentUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' };
+    return err('Not authenticated');
   }
 
   // Verify customer
   if (request.customer_id !== user.id) {
-    return { success: false, error: 'Unauthorized' };
+    return err('Unauthorized');
   }
 
   // ===================================================
@@ -39,10 +47,9 @@ export async function placeOrder(
 
   const orderWindow = checkOrderWindow();
   if (!orderWindow.isAllowed) {
-    return {
-      success: false,
-      error: `Order window closed. Next window opens at 6:00 AM. Time remaining: ${orderWindow.hoursUntilWindow} hours.`,
-    };
+    return err(
+      `Order window closed. Next window opens at 6:00 AM. Time remaining: ${orderWindow.hoursUntilWindow} hours.`
+    );
   }
 
   // ===================================================
@@ -50,11 +57,11 @@ export async function placeOrder(
   // ===================================================
 
   if (request.quantity_kg <= 0) {
-    return { success: false, error: 'Quantity must be greater than 0' };
+    return err('Quantity must be greater than 0');
   }
 
   if (!request.pickup_date) {
-    return { success: false, error: 'Pickup date is required' };
+    return err('Pickup date is required');
   }
 
   // Validate pickup date is today or tomorrow
@@ -64,7 +71,7 @@ export async function placeOrder(
   pickupDate.setHours(0, 0, 0, 0);
 
   if (pickupDate < today) {
-    return { success: false, error: 'Pickup date must be today or later' };
+    return err('Pickup date must be today or later');
   }
 
   const client = await createServerClient();
@@ -80,29 +87,23 @@ export async function placeOrder(
     .single();
 
   if (productError || !product) {
-    return { success: false, error: 'Product not found' };
+    return err('Product not found');
   }
 
   if (!product.is_active) {
-    return { success: false, error: 'Product is not available' };
+    return err('Product is not available');
   }
 
   if (product.seller_id !== request.seller_id) {
-    return { success: false, error: 'Seller ID mismatch' };
+    return err('Seller ID mismatch');
   }
 
   if (product.stock_kg < request.quantity_kg) {
-    return {
-      success: false,
-      error: `Insufficient stock. Available: ${product.stock_kg} kg`,
-    };
+    return err(`Insufficient stock. Available: ${product.stock_kg} kg`);
   }
 
   if (request.quantity_kg < product.min_order_kg) {
-    return {
-      success: false,
-      error: `Minimum order: ${product.min_order_kg} kg`,
-    };
+    return err(`Minimum order: ${product.min_order_kg} kg`);
   }
 
   // ===================================================
@@ -117,7 +118,7 @@ export async function placeOrder(
     .single();
 
   if (villageError || !village) {
-    return { success: false, error: 'Village not found' };
+    return err('Village not found');
   }
 
   // Calculate projected total after this order
@@ -137,15 +138,15 @@ export async function placeOrder(
     .single();
 
   if (pickupError || !pickupPoint) {
-    return { success: false, error: 'Pickup point not found' };
+    return err('Pickup point not found');
   }
 
   if (!pickupPoint.is_active) {
-    return { success: false, error: 'Pickup point is not available' };
+    return err('Pickup point is not available');
   }
 
   if (pickupPoint.village_id !== request.village_id) {
-    return { success: false, error: 'Pickup point does not serve this village' };
+    return err('Pickup point does not serve this village');
   }
 
   // ===================================================
@@ -175,7 +176,7 @@ export async function placeOrder(
 
   if (orderError) {
     console.error('Order creation error:', orderError);
-    return { success: false, error: 'Failed to create order' };
+    return err('Failed to create order');
   }
 
   // Update village current_total_kg
@@ -207,12 +208,12 @@ export async function placeOrder(
 /**
  * Get customer's orders
  */
-export async function getCustomerOrders() {
+export async function getCustomerOrders(): Promise<Result<OrderWithDetails[]>> {
   const client = await createServerClient();
   const user = await getCurrentUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' };
+    return err('Not authenticated');
   }
 
   const { data: orders, error } = await client
@@ -230,24 +231,23 @@ export async function getCustomerOrders() {
 
   if (error) {
     console.error('Error fetching orders:', error);
-    return { success: false, error: 'Failed to fetch orders' };
+    return err('Failed to fetch orders');
   }
 
-  return {
-    success: true,
-    data: (orders || []) as OrderWithDetails[],
-  };
+  return ok((orders ?? []) as OrderWithDetails[]);
 }
 
 /**
  * Get order by ID with full details
  */
-export async function getOrderDetail(orderId: string) {
+export async function getOrderDetail(
+  orderId: string
+): Promise<Result<OrderWithDetails>> {
   const client = await createServerClient();
   const user = await getCurrentUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' };
+    return err('Not authenticated');
   }
 
   const { data: order, error } = await client
@@ -266,29 +266,28 @@ export async function getOrderDetail(orderId: string) {
 
   if (error) {
     console.error('Error fetching order:', error);
-    return { success: false, error: 'Order not found' };
+    return err('Order not found');
   }
 
   // Verify user owns this order
   if (order.customer_id !== user.id) {
-    return { success: false, error: 'Unauthorized' };
+    return err('Unauthorized');
   }
 
-  return {
-    success: true,
-    data: order as OrderWithDetails,
-  };
+  return ok(order as OrderWithDetails);
 }
 
 /**
  * Cancel a pending order
  */
-export async function cancelOrder(orderId: string) {
+export async function cancelOrder(
+  orderId: string
+): Promise<Result<{ message: string }>> {
   const client = await createServerClient();
   const user = await getCurrentUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' };
+    return err('Not authenticated');
   }
 
   const { data: order, error: orderError } = await client
@@ -298,15 +297,15 @@ export async function cancelOrder(orderId: string) {
     .single();
 
   if (orderError || !order) {
-    return { success: false, error: 'Order not found' };
+    return err('Order not found');
   }
 
   if (order.customer_id !== user.id) {
-    return { success: false, error: 'Unauthorized' };
+    return err('Unauthorized');
   }
 
   if (order.status !== 'PENDING' && order.status !== 'CONFIRMED') {
-    return { success: false, error: 'Cannot cancel this order' };
+    return err('Cannot cancel this order');
   }
 
   // Update order status
@@ -317,7 +316,7 @@ export async function cancelOrder(orderId: string) {
 
   if (updateError) {
     console.error('Cancel error:', updateError);
-    return { success: false, error: 'Failed to cancel order' };
+    return err('Failed to cancel order');
   }
 
   // Recalculate village threshold
@@ -343,7 +342,7 @@ export async function cancelOrder(orderId: string) {
       .eq('id', order.village_id);
   }
 
-  return { success: true, message: 'Order cancelled successfully' };
+  return ok({ message: 'Order cancelled successfully' });
 }
 
 /**
@@ -351,7 +350,7 @@ export async function cancelOrder(orderId: string) {
  */
 export async function getVillageThresholdInfo(
   villageId: string
-): Promise<{ success: boolean; error?: string; data?: VillageThresholdInfo }> {
+): Promise<Result<VillageThresholdInfo>> {
   const client = await createServerClient();
 
   const { data: village, error } = await client
@@ -361,7 +360,7 @@ export async function getVillageThresholdInfo(
     .single();
 
   if (error || !village) {
-    return { success: false, error: 'Village not found' };
+    return err('Village not found');
   }
 
   const percentage = Math.min(
@@ -371,29 +370,26 @@ export async function getVillageThresholdInfo(
   const kg_remaining = Math.max(0, village.min_threshold_kg - village.current_total_kg);
   const is_free = village.current_total_kg >= village.min_threshold_kg;
 
-  return {
-    success: true,
-    data: {
-      village_name: village.name_en,
-      current_kg: village.current_total_kg,
-      threshold_kg: village.min_threshold_kg,
-      percentage,
-      kg_remaining,
-      delivery_fee: is_free ? 0 : village.delivery_fee,
-      is_free,
-    },
-  };
+  return ok({
+    village_name: village.name_en,
+    current_kg: village.current_total_kg,
+    threshold_kg: village.min_threshold_kg,
+    percentage,
+    kg_remaining,
+    delivery_fee: is_free ? 0 : village.delivery_fee,
+    is_free,
+  });
 }
 
 /**
  * SELLER: Get orders for their products
  */
-export async function getSellerOrders() {
+export async function getSellerOrders(): Promise<Result<OrderWithDetails[]>> {
   const client = await createServerClient();
   const user = await getCurrentUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' };
+    return err('Not authenticated');
   }
 
   const { data: orders, error } = await client
@@ -411,24 +407,24 @@ export async function getSellerOrders() {
 
   if (error) {
     console.error('Error fetching seller orders:', error);
-    return { success: false, error: 'Failed to fetch orders' };
+    return err('Failed to fetch orders');
   }
 
-  return {
-    success: true,
-    data: (orders || []) as OrderWithDetails[],
-  };
+  return ok((orders ?? []) as OrderWithDetails[]);
 }
 
 /**
  * ADMIN: Get all orders
  */
-export async function getAllOrders(limit = 50, offset = 0) {
+export async function getAllOrders(
+  limit = 50,
+  offset = 0
+): Promise<PaginatedResult<OrderWithDetails[]>> {
   const client = await createServerClient();
   const user = await getCurrentUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' };
+    return err('Not authenticated');
   }
 
   // Verify admin
@@ -439,7 +435,7 @@ export async function getAllOrders(limit = 50, offset = 0) {
     .single();
 
   if (profileError || profile?.role !== 'ADMIN') {
-    return { success: false, error: 'Admin access required' };
+    return err('Admin access required');
   }
 
   const { data: orders, error, count } = await client
@@ -459,25 +455,24 @@ export async function getAllOrders(limit = 50, offset = 0) {
 
   if (error) {
     console.error('Error fetching orders:', error);
-    return { success: false, error: 'Failed to fetch orders' };
+    return err('Failed to fetch orders');
   }
 
-  return {
-    success: true,
-    data: (orders || []) as OrderWithDetails[],
-    total: count || 0,
-  };
+  return okPaginated((orders ?? []) as OrderWithDetails[], count ?? 0);
 }
 
 /**
  * Confirm an order (admin or seller marking as ready)
  */
-export async function confirmOrder(orderId: string, newStatus: string) {
+export async function confirmOrder(
+  orderId: string,
+  newStatus: string
+): Promise<Result<Order>> {
   const client = await createServerClient();
   const user = await getCurrentUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' };
+    return err('Not authenticated');
   }
 
   // Verify order exists and user has permission
@@ -488,11 +483,11 @@ export async function confirmOrder(orderId: string, newStatus: string) {
     .single();
 
   if (orderError || !order) {
-    return { success: false, error: 'Order not found' };
+    return err('Order not found');
   }
 
   if (order.seller_id !== user.id) {
-    return { success: false, error: 'Unauthorized' };
+    return err('Unauthorized');
   }
 
   // Update order status
@@ -515,8 +510,10 @@ export async function confirmOrder(orderId: string, newStatus: string) {
 
   if (updateError) {
     console.error('Update error:', updateError);
-    return { success: false, error: 'Failed to update order' };
+    return err('Failed to update order');
   }
+
+  const updatedTyped = updated as unknown as OrderWithPickupPoint | null;
 
   // Send SMS notification (non-blocking)
   try {
@@ -526,33 +523,30 @@ export async function confirmOrder(orderId: string, newStatus: string) {
       order.customer_id,
       {
         order_id: orderId.slice(0, 8),
-        total_amount: updated?.total_amount || 0,
-        quantity_kg: updated?.quantity_kg || 0,
-        pickup_point_name: updated?.pickup_points?.name_en || 'Your pickup point',
-        pickup_date: updated?.pickup_date || 'TBD',
+        total_amount: updatedTyped?.total_amount ?? 0,
+        quantity_kg: updatedTyped?.quantity_kg ?? 0,
+        pickup_point_name: updatedTyped?.pickup_points?.name_en ?? 'Your pickup point',
+        pickup_date: updatedTyped?.pickup_date ?? 'TBD',
       }
     );
-  } catch (err) {
-    console.error('Error sending notification:', err);
-    // Don't fail the order update if notification fails
+  } catch (e) {
+    console.error('Error sending notification:', e);
   }
 
-  return {
-    success: true,
-    data: updated as Order,
-    message: `Order status updated to ${newStatus}`,
-  };
+  return ok(updatedTyped as unknown as Order);
 }
 
 /**
  * Mark order as collected (pickup agent action)
  */
-export async function markOrderCollected(orderId: string) {
+export async function markOrderCollected(
+  orderId: string
+): Promise<Result<Order>> {
   const client = await createServerClient();
   const user = await getCurrentUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' };
+    return err('Not authenticated');
   }
 
   // Verify user is pickup agent for this order
@@ -563,7 +557,7 @@ export async function markOrderCollected(orderId: string) {
     .single();
 
   if (orderError || !order) {
-    return { success: false, error: 'Order not found' };
+    return err('Order not found');
   }
 
   // Verify pickup agent is assigned to this pickup point
@@ -574,7 +568,7 @@ export async function markOrderCollected(orderId: string) {
     .single();
 
   if (pickupError || pickupPoint?.agent_id !== user.id) {
-    return { success: false, error: 'Unauthorized' };
+    return err('Unauthorized');
   }
 
   // Update order status and collected_at timestamp
@@ -599,8 +593,10 @@ export async function markOrderCollected(orderId: string) {
 
   if (updateError) {
     console.error('Update error:', updateError);
-    return { success: false, error: 'Failed to mark order collected' };
+    return err('Failed to mark order collected');
   }
+
+  const updatedTyped = updated as unknown as OrderWithPickupPoint | null;
 
   // Send SMS notification (non-blocking)
   try {
@@ -610,20 +606,15 @@ export async function markOrderCollected(orderId: string) {
       order.customer_id,
       {
         order_id: orderId.slice(0, 8),
-        total_amount: updated?.total_amount || 0,
-        quantity_kg: updated?.quantity_kg || 0,
-        pickup_point_name: updated?.pickup_points?.name_en || 'Your pickup point',
-        pickup_date: updated?.pickup_date || 'TBD',
+        total_amount: updatedTyped?.total_amount ?? 0,
+        quantity_kg: updatedTyped?.quantity_kg ?? 0,
+        pickup_point_name: updatedTyped?.pickup_points?.name_en ?? 'Your pickup point',
+        pickup_date: updatedTyped?.pickup_date ?? 'TBD',
       }
     );
-  } catch (err) {
-    console.error('Error sending notification:', err);
-    // Don't fail the order collection if notification fails
+  } catch (e) {
+    console.error('Error sending notification:', e);
   }
 
-  return {
-    success: true,
-    data: updated as Order,
-    message: 'Order marked as collected',
-  };
+  return ok(updatedTyped as unknown as Order);
 }

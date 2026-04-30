@@ -43,7 +43,7 @@ export default async function NIDVerificationPage() {
         </div>
 
         {/* Upload Form */}
-        {profile.nid_status !== 'APPROVED' && (
+        {(
           <div className="rounded-lg border border-gray-200 bg-white p-8 shadow-sm">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">
               {profile.nid_status === 'REJECTED' ? 'Resubmit NID' : 'Submit NID'}
@@ -83,7 +83,7 @@ export default async function NIDVerificationPage() {
         )}
 
         {/* Already Approved */}
-        {profile.nid_status === 'APPROVED' && (
+        {false && (
           <div className="rounded-lg border border-green-200 bg-green-50 p-8 text-center">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-4">
               <svg

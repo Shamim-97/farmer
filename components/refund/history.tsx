@@ -28,10 +28,10 @@ export default function RefundHistory({ onSelectRefund }: RefundHistoryProps) {
       try {
         const result = await getCustomerRefunds();
         if (result.success) {
-          setRefunds(result.data);
+          setRefunds(result.data ?? []);
           setError(null);
         } else {
-          setError(result.error);
+          setError(result.error ?? null);
         }
       } catch (err) {
         setError('Failed to fetch refund history');

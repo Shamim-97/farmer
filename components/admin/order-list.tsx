@@ -2,16 +2,16 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
-  Badge,
-  Input,
-  Button,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/badge';
+} from '@/components/ui/select';
 import {
   ChevronLeft,
   ChevronRight,
@@ -57,11 +57,11 @@ export default function AdminOrderList() {
       });
 
       if (result.success) {
-        setOrders(result.data);
-        setTotal(result.total);
+        setOrders(result.data ?? []);
+        setTotal(result.total ?? 0);
         setError(null);
       } else {
-        setError(result.error);
+        setError(result.error ?? null);
       }
     } catch (err) {
       setError('Failed to fetch orders');

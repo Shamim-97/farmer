@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
-import { Badge, Button } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   MapPin,
   Navigation,
@@ -27,10 +28,10 @@ export default function AdminAgentMap() {
     try {
       const result = await getAdminAgents();
       if (result.success) {
-        setAgents(result.data);
+        setAgents(result.data ?? []);
         setError(null);
       } else {
-        setError(result.error);
+        setError(result.error ?? null);
       }
     } catch (err) {
       setError('Failed to fetch agents');
@@ -201,7 +202,7 @@ export default function AdminAgentMap() {
                               )}
                             </span>
                           </div>
-                          {agent.current_session.gps_lat && (
+                          {agent.current_session.gps_lat != null && agent.current_session.gps_lng != null && (
                             <div className="flex justify-between">
                               <span className="text-slate-600">GPS:</span>
                               <span className="font-mono text-xs">

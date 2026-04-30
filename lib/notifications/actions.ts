@@ -1,12 +1,16 @@
 'use server';
 
 import { createServerClient } from '@/lib/supabase/server';
+import { isPlaceholderEnv } from '@/lib/env';
 import {
   NotificationType,
   NotificationChannel,
   NotificationStatus,
   NOTIFICATION_MESSAGES,
 } from '@/lib/types/notification';
+
+const SKIP = { success: false as const, error: 'Supabase not configured' };
+const SKIP_DATA = { success: true as const, data: [] as any[] };
 
 /**
  * Send SMS/WhatsApp notification to user
@@ -20,6 +24,7 @@ export async function sendNotification(
   data: any = {},
   referenceId?: string
 ) {
+  if (isPlaceholderEnv()) return SKIP;
   try {
     const client = await createServerClient();
 
@@ -130,6 +135,7 @@ export async function notifyOrderStatusChange(
   customerId: string,
   orderData: any
 ) {
+  if (isPlaceholderEnv()) return;
   const client = await createServerClient();
 
   // Get customer phone
@@ -189,6 +195,7 @@ export async function notifyRefundStatusChange(
   refundAmount: number,
   reason?: string
 ) {
+  if (isPlaceholderEnv()) return;
   const client = await createServerClient();
 
   const { data: customer } = await client
@@ -235,6 +242,7 @@ export async function notifyNIDStatusChange(
   userId: string,
   newStatus: string
 ) {
+  if (isPlaceholderEnv()) return;
   const client = await createServerClient();
 
   const { data: user } = await client
@@ -278,6 +286,7 @@ export async function notifyAgentEarnings(
   monthlyEarnings: number,
   month: string
 ) {
+  if (isPlaceholderEnv()) return;
   const client = await createServerClient();
 
   const { data: agent } = await client
@@ -310,6 +319,7 @@ export async function getNotificationHistory(
   userId: string,
   limit = 50
 ) {
+  if (isPlaceholderEnv()) return SKIP_DATA;
   try {
     const client = await createServerClient();
 
@@ -335,6 +345,7 @@ export async function getNotificationHistory(
  * Mark notification as delivered
  */
 export async function markNotificationDelivered(notificationId: string) {
+  if (isPlaceholderEnv()) return SKIP;
   try {
     const client = await createServerClient();
 

@@ -24,9 +24,10 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     if (!user) return;
+    const userId = user.id;
 
     async function fetchNotifications() {
-      const result = await getNotificationHistory(user.id, 100);
+      const result = await getNotificationHistory(userId, 100);
       if (result.success) {
         setNotifications(result.data || []);
         setError(null);

@@ -47,16 +47,16 @@ export function VillageProgress({
   // Subscribe to Realtime updates
   useEffect(() => {
     const subscription = client
-      .from('villages')
+      .channel(`village_progress_${villageId}`)
       .on(
-        'postgres_changes',
+        'postgres_changes' as never,
         {
           event: 'UPDATE',
           schema: 'public',
           table: 'villages',
           filter: `id=eq.${villageId}`,
         },
-        (payload) => {
+        (payload: { new: any }) => {
           const updated = payload.new;
           setProgress({
             village_name: updated.name_en,

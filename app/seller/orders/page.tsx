@@ -30,7 +30,7 @@ export default function SellerOrdersPage() {
       try {
         const result = await getSellerOrders();
         if (result.success) {
-          setOrders(result.data || []);
+          setOrders((result.data || []) as OrderWithDetails[]);
         } else {
           setError(result.error || 'Failed to fetch orders');
         }
@@ -56,7 +56,7 @@ export default function SellerOrdersPage() {
       if (result.success) {
         setOrders(
           orders.map((o) =>
-            o.id === orderId ? { ...o, status: newStatus } : o
+            o.id === orderId ? { ...o, status: newStatus as OrderWithDetails['status'] } : o
           )
         );
       } else {
@@ -264,7 +264,8 @@ function OrderCard({
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
-      time: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
     });
   };
 
@@ -299,7 +300,7 @@ function OrderCard({
         <div>
           <p className="text-slate-600">Customer</p>
           <p className="font-semibold text-slate-900">
-            {order.customer?.full_name?.split(' ')[0] || 'N/A'}
+            {(order as any).customer?.full_name?.split(' ')[0] || 'N/A'}
           </p>
         </div>
         <div>

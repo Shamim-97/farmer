@@ -61,14 +61,11 @@ export const ROLE_PERMISSIONS = {
   },
 } as const;
 
-export const PUBLIC_ROUTES = [
-  '/',
-  '/auth/signin',
-  '/auth/signup',
-  '/auth/reset-password',
-  '/api/auth/callback',
-];
-
-export const SELLER_ONLY_ROUTES = ['/seller/dashboard', '/seller/create-listing'];
-export const ADMIN_ONLY_ROUTES = ['/admin', '/admin/approvals', '/admin/orders'];
-export const AGENT_ONLY_ROUTES = ['/agent/dashboard', '/agent/orders'];
+// Route constants moved to @/lib/constants/routes.
+// Re-exported here for back-compat. Prefer importing from constants/routes.
+export {
+  PUBLIC_ROUTES,
+  SELLER_ONLY_ROUTES,
+  ADMIN_ONLY_ROUTES,
+  AGENT_ONLY_ROUTES,
+} from '@/lib/constants/routes';

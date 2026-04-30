@@ -9,6 +9,19 @@ import {
   AdminOrderDetail,
   HeatmapDataPoint,
 } from '@/lib/types/admin';
+import type {
+  OrderWithJoins,
+  AgentWithPickupPoint,
+  AgentSession,
+} from '@/lib/types/db-views';
+import type { OrderRow } from '@/lib/supabase/database.types';
+import {
+  ok,
+  err,
+  okPaginated,
+  type Result,
+  type PaginatedResult,
+} from '@/lib/types/result';
 
 /**
  * Get ALL orders with real-time status (admin only)
@@ -17,16 +30,12 @@ export async function getAdminOrders(
   limit = 100,
   offset = 0,
   filter?: { status?: string; village_id?: string }
-) {
+): Promise<PaginatedResult<AdminOrderView[]>> {
   const user = await getCurrentUser();
-
-  if (!user) {
-    return { success: false, error: 'Not authenticated' };
-  }
+  if (!user) return err('Not authenticated');
 
   const client = await createServerClient();
 
-  // Verify admin
   const { data: profile, error: profileError } = await client
     .from('profiles')
     .select('role')
@@ -34,7 +43,7 @@ export async function getAdminOrders(
     .single();
 
   if (profileError || profile?.role !== 'ADMIN') {
-    return { success: false, error: 'Admin access required' };
+    return err('Admin access required');
   }
 
   let query = client
@@ -78,46 +87,41 @@ export async function getAdminOrders(
 
   if (error) {
     console.error('Error fetching orders:', error);
-    return { success: false, error: 'Failed to fetch orders' };
+    return err('Failed to fetch orders');
   }
 
-  const formattedOrders = (data || []).map((o) => ({
+  const rows = (data ?? []) as unknown as OrderWithJoins[];
+  const formattedOrders: AdminOrderView[] = rows.map((o) => ({
     id: o.id,
     order_id: o.id,
-    customer_name: o.customer?.full_name || 'Unknown',
-    customer_phone: o.customer?.phone || 'N/A',
-    product_name: o.product?.name_en || 'Product',
+    customer_name: o.customer?.full_name ?? 'Unknown',
+    customer_phone: o.customer?.phone ?? 'N/A',
+    product_name: o.product?.name_en ?? 'Product',
     quantity_kg: o.quantity_kg,
     total_amount: o.total_amount,
     status: o.status,
     payment_status: o.payment_status,
-    pickup_point: o.pickup_point?.name || 'Unknown',
-    village_name: o.village?.name_en || 'Unknown',
-    seller_name: o.seller?.full_name || 'Unknown',
+    pickup_point: o.pickup_point?.name ?? 'Unknown',
+    village_name: o.village?.name_en ?? 'Unknown',
+    seller_name: o.seller?.full_name ?? 'Unknown',
     created_at: o.created_at,
     updated_at: o.updated_at,
-  })) as AdminOrderView[];
+  }));
 
-  return {
-    success: true,
-    data: formattedOrders,
-    total: count || 0,
-  };
+  return okPaginated(formattedOrders, count ?? 0);
 }
 
 /**
  * Get detailed order information with collection proof
  */
-export async function getAdminOrderDetail(orderId: string) {
+export async function getAdminOrderDetail(
+  orderId: string
+): Promise<Result<AdminOrderDetail>> {
   const user = await getCurrentUser();
-
-  if (!user) {
-    return { success: false, error: 'Not authenticated' };
-  }
+  if (!user) return err('Not authenticated');
 
   const client = await createServerClient();
 
-  // Verify admin
   const { data: profile, error: profileError } = await client
     .from('profiles')
     .select('role')
@@ -125,7 +129,7 @@ export async function getAdminOrderDetail(orderId: string) {
     .single();
 
   if (profileError || profile?.role !== 'ADMIN') {
-    return { success: false, error: 'Admin access required' };
+    return err('Admin access required');
   }
 
   const { data: order, error } = await client
@@ -143,67 +147,58 @@ export async function getAdminOrderDetail(orderId: string) {
     .eq('id', orderId)
     .single();
 
-  if (error || !order) {
-    return { success: false, error: 'Order not found' };
-  }
+  if (error || !order) return err('Order not found');
 
-  // Get collection proof if collected
   const { data: proof } = await client
     .from('collection_proofs')
     .select('photo_url, gps_lat, gps_lng, timestamp')
     .eq('order_id', orderId)
     .single();
 
-  return {
-    success: true,
-    data: {
-      id: order.id,
-      order_id: order.id,
-      customer_name: order.customer?.full_name,
-      customer_phone: order.customer?.phone,
-      product_name: order.product?.name_en,
-      quantity_kg: order.quantity_kg,
-      total_amount: order.total_amount,
-      status: order.status,
-      payment_status: order.payment_status,
-      pickup_point: order.pickup_point?.name,
-      village_name: order.village?.name_en,
-      seller_name: order.seller?.full_name,
-      seller_phone: order.seller?.phone,
-      seller_nid_status: order.seller?.nid_status,
-      location_details: {
-        pickup_point_lat: order.pickup_point?.gps_lat,
-        pickup_point_lng: order.pickup_point?.gps_lng,
-        village_lat: order.village?.gps_lat,
-        village_lng: order.village?.gps_lng,
-      },
-      collection_proof: proof
-        ? {
-            photo_url: proof.photo_url,
-            gps_lat: proof.gps_lat,
-            gps_lng: proof.gps_lng,
-            collected_at: proof.timestamp,
-          }
-        : null,
-      created_at: order.created_at,
-      updated_at: order.updated_at,
-    } as AdminOrderDetail,
-  };
+  const o = order as any;
+  return ok({
+    id: o.id,
+    order_id: o.id,
+    customer_name: o.customer?.full_name,
+    customer_phone: o.customer?.phone,
+    product_name: o.product?.name_en,
+    quantity_kg: o.quantity_kg,
+    total_amount: o.total_amount,
+    status: o.status,
+    payment_status: o.payment_status,
+    pickup_point: o.pickup_point?.name,
+    village_name: o.village?.name_en,
+    seller_name: o.seller?.full_name,
+    seller_phone: o.seller?.phone,
+    seller_nid_status: o.seller?.nid_status,
+    location_details: {
+      pickup_point_lat: o.pickup_point?.gps_lat,
+      pickup_point_lng: o.pickup_point?.gps_lng,
+      village_lat: o.village?.gps_lat,
+      village_lng: o.village?.gps_lng,
+    },
+    collection_proof: proof
+      ? {
+          photo_url: proof.photo_url,
+          gps_lat: proof.gps_lat,
+          gps_lng: proof.gps_lng,
+          collected_at: proof.timestamp,
+        }
+      : null,
+    created_at: o.created_at,
+    updated_at: o.updated_at,
+  } as AdminOrderDetail);
 }
 
 /**
  * Get all active agents with real-time status
  */
-export async function getAdminAgents() {
+export async function getAdminAgents(): Promise<Result<AdminAgentView[]>> {
   const user = await getCurrentUser();
-
-  if (!user) {
-    return { success: false, error: 'Not authenticated' };
-  }
+  if (!user) return err('Not authenticated');
 
   const client = await createServerClient();
 
-  // Verify admin
   const { data: profile, error: profileError } = await client
     .from('profiles')
     .select('role')
@@ -211,7 +206,7 @@ export async function getAdminAgents() {
     .single();
 
   if (profileError || profile?.role !== 'ADMIN') {
-    return { success: false, error: 'Admin access required' };
+    return err('Admin access required');
   }
 
   const { data: agents, error } = await client
@@ -228,16 +223,16 @@ export async function getAdminAgents() {
 
   if (error) {
     console.error('Error fetching agents:', error);
-    return { success: false, error: 'Failed to fetch agents' };
+    return err('Failed to fetch agents');
   }
 
   // Get agent sessions and statistics
   const today = new Date().toISOString().split('T')[0];
 
-  const agentViews = await Promise.all(
-    (agents || []).map(async (agent) => {
-      // Get current session
-      const { data: session } = await client
+  const typedAgents = (agents ?? []) as unknown as AgentWithPickupPoint[];
+  const agentViews: AdminAgentView[] = await Promise.all(
+    typedAgents.map(async (agent) => {
+      const { data: sessionRaw } = await client
         .from('pickup_agent_sessions')
         .select('*')
         .eq('agent_id', agent.id)
@@ -246,8 +241,8 @@ export async function getAdminAgents() {
         .order('start_time', { ascending: false })
         .limit(1)
         .single();
+      const session = sessionRaw as AgentSession | null;
 
-      // Get today's statistics
       const { data: stats } = await client
         .from('collection_proofs')
         .select('id')
@@ -257,47 +252,40 @@ export async function getAdminAgents() {
 
       return {
         id: agent.id,
-        name: agent.full_name,
+        name: agent.full_name ?? 'Unknown',
         phone: agent.phone,
-        pickup_point: agent.pickup_points?.[0]?.name || 'Unassigned',
-        status: session?.status || 'OFF_DUTY',
+        pickup_point: agent.pickup_points?.[0]?.name ?? 'Unassigned',
+        status: (session?.status ?? 'OFF_DUTY') as AdminAgentView['status'],
         current_session: session
           ? {
               started_at: session.start_time,
               orders_collected: session.orders_collected,
               earnings: session.earnings,
-              gps_lat: session.gps_lat,
-              gps_lng: session.gps_lng,
+              gps_lat: session.gps_lat ?? undefined,
+              gps_lng: session.gps_lng ?? undefined,
             }
           : undefined,
         today_stats: {
-          orders_collected: stats?.length || 0,
-          earnings: (stats?.length || 0) * 50, // Placeholder
-          collections_count: stats?.length || 0,
+          orders_collected: stats?.length ?? 0,
+          earnings: (stats?.length ?? 0) * 50, // Placeholder
+          collections_count: stats?.length ?? 0,
         },
       };
     })
   );
 
-  return {
-    success: true,
-    data: agentViews as AdminAgentView[],
-  };
+  return ok(agentViews);
 }
 
 /**
  * Get comprehensive admin analytics
  */
-export async function getAdminAnalytics() {
+export async function getAdminAnalytics(): Promise<Result<AdminAnalytics>> {
   const user = await getCurrentUser();
-
-  if (!user) {
-    return { success: false, error: 'Not authenticated' };
-  }
+  if (!user) return err('Not authenticated');
 
   const client = await createServerClient();
 
-  // Verify admin
   const { data: profile, error: profileError } = await client
     .from('profiles')
     .select('role')
@@ -305,7 +293,7 @@ export async function getAdminAnalytics() {
     .single();
 
   if (profileError || profile?.role !== 'ADMIN') {
-    return { success: false, error: 'Admin access required' };
+    return err('Admin access required');
   }
 
   const today = new Date().toISOString().split('T')[0];
@@ -328,10 +316,10 @@ export async function getAdminAnalytics() {
 
   let totalRevenue = 0;
   let collectedCount = 0;
-  const collectionTimes: number[] = [];
 
-  (allOrders || []).forEach((order) => {
-    ordersByStatus[order.status] += 1;
+  type OrderStatusRow = Pick<OrderRow, 'status' | 'total_amount'>;
+  ((allOrders ?? []) as unknown as OrderStatusRow[]).forEach((order) => {
+    ordersByStatus[order.status as keyof typeof ordersByStatus] += 1;
     totalRevenue += order.total_amount || 0;
     if (order.status === 'COLLECTED') {
       collectedCount += 1;
@@ -346,7 +334,7 @@ export async function getAdminAnalytics() {
     .lte('created_at', `${today}T23:59:59`);
 
   const villageMap: {
-    [key: string]: { name: string; orders: number; revenue: number };
+    [key: string]: { village: string; orders: number; revenue: number };
   } = {};
 
   for (const stat of villageStats || []) {
@@ -358,7 +346,7 @@ export async function getAdminAnalytics() {
 
     if (!villageMap[stat.village_id]) {
       villageMap[stat.village_id] = {
-        name: village?.name_en || 'Unknown',
+        village: village?.name_en || 'Unknown',
         orders: 0,
         revenue: 0,
       };
@@ -411,41 +399,34 @@ export async function getAdminAnalytics() {
     }
   }
 
-  return {
-    success: true,
-    data: {
-      total_orders_today: allOrders?.length || 0,
-      pending_orders: ordersByStatus.PENDING,
-      ready_orders: ordersByStatus.READY,
-      collected_orders: ordersByStatus.COLLECTED,
-      abandoned_orders: ordersByStatus.ABANDONED,
-      total_revenue_today: totalRevenue,
-      avg_order_value: allOrders?.length ? totalRevenue / allOrders.length : 0,
-      delivery_fee_collected: 0, // To be calculated
-      agents_on_duty: agentsOnDuty || 0,
-      avg_collection_time_minutes: 15, // Placeholder
-      villages_reached: Object.keys(villageMap).length,
-      best_performing_agent: bestAgent,
-      orders_by_status: ordersByStatus,
-      orders_by_village: Object.values(villageMap),
-      hourly_orders: [], // Placeholder for now
-    } as AdminAnalytics,
-  };
+  return ok({
+    total_orders_today: allOrders?.length || 0,
+    pending_orders: ordersByStatus.PENDING,
+    ready_orders: ordersByStatus.READY,
+    collected_orders: ordersByStatus.COLLECTED,
+    abandoned_orders: ordersByStatus.ABANDONED,
+    total_revenue_today: totalRevenue,
+    avg_order_value: allOrders?.length ? totalRevenue / allOrders.length : 0,
+    delivery_fee_collected: 0,
+    agents_on_duty: agentsOnDuty || 0,
+    avg_collection_time_minutes: 15,
+    villages_reached: Object.keys(villageMap).length,
+    best_performing_agent: bestAgent,
+    orders_by_status: ordersByStatus,
+    orders_by_village: Object.values(villageMap),
+    hourly_orders: [],
+  } as AdminAnalytics);
 }
 
 /**
  * Get heatmap data for villages
  */
-export async function getHeatmapData() {
+export async function getHeatmapData(): Promise<Result<HeatmapDataPoint[]>> {
   const user = await getCurrentUser();
-
-  if (!user) {
-    return { success: false, error: 'Not authenticated' };
-  }
+  if (!user) return err('Not authenticated');
 
   const client = await createServerClient();
 
-  // Verify admin
   const { data: profile, error: profileError } = await client
     .from('profiles')
     .select('role')
@@ -453,27 +434,36 @@ export async function getHeatmapData() {
     .single();
 
   if (profileError || profile?.role !== 'ADMIN') {
-    return { success: false, error: 'Admin access required' };
+    return err('Admin access required');
   }
 
   const { data: villages } = await client
     .from('villages')
     .select('id, name_en, gps_lat, gps_lng');
 
-  if (!villages) {
-    return { success: true, data: [] };
-  }
+  if (!villages) return ok([] as HeatmapDataPoint[]);
+
+  const typedVillages = villages as unknown as Array<{
+    id: string;
+    name_en: string;
+    gps_lat: number;
+    gps_lng: number;
+  }>;
 
   const heatmapData = await Promise.all(
-    villages.map(async (village) => {
+    typedVillages.map(async (village) => {
       const { data: orders, count } = await client
         .from('orders')
         .select('total_amount', { count: 'exact' })
         .eq('village_id', village.id)
         .eq('status', 'COLLECTED');
 
-      const revenue = (orders || []).reduce((sum, o) => sum + (o.total_amount || 0), 0);
-      const intensity = Math.min(1, (count || 0) / 100); // Normalize to 0-1
+      const typedOrders = (orders ?? []) as Array<{ total_amount: number }>;
+      const revenue = typedOrders.reduce(
+        (sum, o) => sum + (o.total_amount || 0),
+        0
+      );
+      const intensity = Math.min(1, (count || 0) / 100);
 
       return {
         village: village.name_en,
@@ -486,8 +476,5 @@ export async function getHeatmapData() {
     })
   );
 
-  return {
-    success: true,
-    data: heatmapData,
-  };
+  return ok(heatmapData);
 }

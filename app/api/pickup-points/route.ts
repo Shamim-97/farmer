@@ -1,4 +1,5 @@
 import { createServerClient } from '@/lib/supabase/server';
+import { isPlaceholderEnv } from '@/lib/env';
 import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
@@ -12,6 +13,10 @@ export async function GET(request: NextRequest) {
         { success: false, error: 'village_id is required' },
         { status: 400 }
       );
+    }
+
+    if (isPlaceholderEnv()) {
+      return NextResponse.json({ success: true, data: [] });
     }
 
     const client = await createServerClient();

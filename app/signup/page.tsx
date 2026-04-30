@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { signUp } from '@/lib/auth/actions';
 
 const ROLES = [
   {
@@ -25,7 +26,15 @@ const ROLES = [
   },
 ];
 
-export default function SignUp() {
+export default function SignUpPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-slate-600">Loading…</div>}>
+      <SignUp />
+    </Suspense>
+  );
+}
+
+function SignUp() {
   const [step, setStep] = useState(1);
   const [selectedRole, setSelectedRole] = useState('');
   const [name, setName] = useState('');
@@ -58,19 +67,14 @@ export default function SignUp() {
     setLoading(true);
 
     try {
-      // TODO: Integrate with Supabase Auth
-      console.log('Sign up with:', { name, email, phone, password, role: selectedRole });
-      
-      // For demo, redirect based on role
-      const redirects: Record<string, string> = {
-        customer: '/customer',
-        seller: '/seller',
-        agent: '/agent',
-      };
-      
-      router.push(redirects[selectedRole] || '/');
+      const result = await signUp(email, password, phone);
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      router.push('/signin?signup=ok');
     } catch (err) {
-      setError('Failed to sign up. Please try again.');
+      setError(err instanceof Error ? err.message : 'Failed to sign up');
     } finally {
       setLoading(false);
     }

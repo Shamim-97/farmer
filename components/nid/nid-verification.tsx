@@ -23,7 +23,7 @@ export function NIDStatusBanner() {
       if (profile?.role === 'SELLER') {
         const result = await getNIDStatus();
         if (result.success && result.data) {
-          setStatus(result.data.status);
+          setStatus(result.data.status as typeof status);
           setReason(result.data.reason);
         }
       }

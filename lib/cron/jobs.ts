@@ -6,16 +6,23 @@
  */
 
 import { createServerClient } from '@/lib/supabase/server';
+import { isPlaceholderEnv } from '@/lib/env';
 import {
   notifyOrderStatusChange,
   notifyAgentEarnings,
 } from '@/lib/notifications/actions';
+
+const SKIP_RESULT = {
+  success: false,
+  error: 'Supabase not configured; cron skipped',
+};
 
 /**
  * CRON: Every 1 hour
  * Mark orders as ABANDONED if PENDING/CONFIRMED for > 24 hours
  */
 export async function abandonedOrderCleanup() {
+  if (isPlaceholderEnv()) return SKIP_RESULT;
   try {
     const client = await createServerClient();
 
@@ -106,6 +113,7 @@ export async function abandonedOrderCleanup() {
  * Reset village thresholds to 0 for the new day
  */
 export async function dailyThresholdReset() {
+  if (isPlaceholderEnv()) return SKIP_RESULT;
   try {
     const client = await createServerClient();
 
@@ -138,6 +146,7 @@ export async function dailyThresholdReset() {
  * Send daily earnings reports to agents
  */
 export async function dailyAgentEarningsReport() {
+  if (isPlaceholderEnv()) return SKIP_RESULT;
   try {
     const client = await createServerClient();
 
@@ -230,6 +239,7 @@ export async function dailyAgentEarningsReport() {
  * Clean up expired refunds and mark them as expired
  */
 export async function refundExpiryCleanup() {
+  if (isPlaceholderEnv()) return SKIP_RESULT;
   try {
     const client = await createServerClient();
 
@@ -285,6 +295,7 @@ export async function refundExpiryCleanup() {
  * Clean up old notifications (older than 90 days)
  */
 export async function notificationCleanup() {
+  if (isPlaceholderEnv()) return SKIP_RESULT;
   try {
     const client = await createServerClient();
 
@@ -318,6 +329,7 @@ export async function notificationCleanup() {
  * Deactivate sellers who haven't confirmed orders in 30 days
  */
 export async function sellerInactivityCheck() {
+  if (isPlaceholderEnv()) return SKIP_RESULT;
   try {
     const client = await createServerClient();
 

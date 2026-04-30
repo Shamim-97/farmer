@@ -32,6 +32,7 @@ export interface OrderWithDetails extends Order {
   };
   seller?: {
     full_name: string;
+    phone?: string;
   };
   pickup_point?: {
     name: string;

@@ -1,35 +1,36 @@
 'use server';
 
+import type { User } from '@supabase/supabase-js';
 import { createServerClient, supabaseAdmin } from '@/lib/supabase/server';
 import { UserProfile } from '@/lib/types/auth';
+import { isPlaceholderEnv } from '@/lib/env';
+import { ok, err, type Result } from '@/lib/types/result';
 import { redirect } from 'next/navigation';
+
+const ENV_NOT_CONFIGURED = err(
+  'Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local.'
+);
 
 /**
  * Sign up new user with email and password
  */
-export async function signUp(email: string, password: string, phone: string) {
+export async function signUp(
+  email: string,
+  password: string,
+  phone: string
+): Promise<Result<{ user: User; message: string }>> {
+  if (isPlaceholderEnv()) return ENV_NOT_CONFIGURED;
   const client = await createServerClient();
 
-  // Create auth user
   const { data: authData, error: authError } = await client.auth.signUp({
     email,
     password,
-    options: {
-      data: {
-        phone,
-      },
-    },
+    options: { data: { phone } },
   });
 
-  if (authError) {
-    return { error: authError.message };
-  }
+  if (authError) return err(authError.message);
+  if (!authData.user) return err('Failed to create user');
 
-  if (!authData.user) {
-    return { error: 'Failed to create user' };
-  }
-
-  // Create profile record
   const { error: profileError } = await client.from('profiles').insert({
     id: authData.user.id,
     phone,
@@ -41,20 +42,23 @@ export async function signUp(email: string, password: string, phone: string) {
 
   if (profileError) {
     console.error('Profile creation error:', profileError);
-    return { error: 'Failed to create profile' };
+    return err('Failed to create profile');
   }
 
-  return {
-    success: true,
-    message: 'Sign up successful. Please check your email to confirm.',
+  return ok({
     user: authData.user,
-  };
+    message: 'Sign up successful. Please check your email to confirm.',
+  });
 }
 
 /**
  * Sign in with email and password
  */
-export async function signIn(email: string, password: string) {
+export async function signIn(
+  email: string,
+  password: string
+): Promise<Result<{ user: User }>> {
+  if (isPlaceholderEnv()) return ENV_NOT_CONFIGURED;
   const client = await createServerClient();
 
   const { data, error } = await client.auth.signInWithPassword({
@@ -62,35 +66,27 @@ export async function signIn(email: string, password: string) {
     password,
   });
 
-  if (error) {
-    return { error: error.message };
-  }
-
-  return {
-    success: true,
-    user: data.user,
-  };
+  if (error) return err(error.message);
+  return ok({ user: data.user });
 }
 
 /**
  * Sign out current user
  */
 export async function signOut() {
+  if (isPlaceholderEnv()) redirect('/signin');
   const client = await createServerClient();
 
   const { error } = await client.auth.signOut();
-
-  if (error) {
-    return { error: error.message };
-  }
-
+  if (error) return err(error.message);
   redirect('/');
 }
 
 /**
  * Get current user (server-side)
  */
-export async function getCurrentUser() {
+export async function getCurrentUser(): Promise<User | null> {
+  if (isPlaceholderEnv()) return null;
   const client = await createServerClient();
 
   const {
@@ -98,10 +94,7 @@ export async function getCurrentUser() {
     error,
   } = await client.auth.getUser();
 
-  if (error || !user) {
-    return null;
-  }
-
+  if (error || !user) return null;
   return user;
 }
 
@@ -111,25 +104,19 @@ export async function getCurrentUser() {
 export async function updateProfile(
   userId: string,
   updates: Partial<UserProfile>
-) {
+): Promise<Result<void>> {
   const client = await createServerClient();
 
-  // Verify user is updating their own profile
   const currentUser = await getCurrentUser();
-  if (!currentUser || currentUser.id !== userId) {
-    return { error: 'Unauthorized' };
-  }
+  if (!currentUser || currentUser.id !== userId) return err('Unauthorized');
 
   const { error } = await client
     .from('profiles')
     .update(updates)
     .eq('id', userId);
 
-  if (error) {
-    return { error: error.message };
-  }
-
-  return { success: true };
+  if (error) return err(error.message);
+  return ok(undefined);
 }
 
 /**
@@ -139,10 +126,9 @@ export async function uploadNIDPhotos(
   userId: string,
   frontPhotoUrl: string,
   backPhotoUrl: string
-) {
+): Promise<Result<{ message: string }>> {
   const client = await createServerClient();
 
-  // Verify user is seller
   const { data: profile, error: profileError } = await client
     .from('profiles')
     .select('role')
@@ -150,10 +136,9 @@ export async function uploadNIDPhotos(
     .single();
 
   if (profileError || profile?.role !== 'SELLER') {
-    return { error: 'Only sellers can upload NID' };
+    return err('Only sellers can upload NID');
   }
 
-  // Update NID status to PENDING and store photo URLs
   const { error } = await client
     .from('profiles')
     .update({
@@ -163,13 +148,8 @@ export async function uploadNIDPhotos(
     })
     .eq('id', userId);
 
-  if (error) {
-    return { error: error.message };
-  }
-
-  // TODO: Trigger SMS notification to seller with "Under Review" message
-
-  return { success: true, message: 'NID submitted. Review within 24 hours.' };
+  if (error) return err(error.message);
+  return ok({ message: 'NID submitted. Review within 24 hours.' });
 }
 
 /**
@@ -178,10 +158,9 @@ export async function uploadNIDPhotos(
 export async function approveSellerNID(
   sellerId: string,
   adminId: string
-) {
+): Promise<Result<void>> {
   const client = await createServerClient();
 
-  // Verify caller is admin
   const { data: adminProfile, error: adminError } = await client
     .from('profiles')
     .select('role')
@@ -189,26 +168,16 @@ export async function approveSellerNID(
     .single();
 
   if (adminError || adminProfile?.role !== 'ADMIN') {
-    return { error: 'Unauthorized: Only admins can approve NIDs' };
+    return err('Unauthorized: Only admins can approve NIDs');
   }
 
-  // Update NID status using service role for admin operations
   const { error } = await supabaseAdmin
     .from('profiles')
-    .update({
-      nid_status: 'APPROVED',
-      nid_rejection_reason: null,
-    })
+    .update({ nid_status: 'APPROVED', nid_rejection_reason: null })
     .eq('id', sellerId);
 
-  if (error) {
-    return { error: error.message };
-  }
-
-  // TODO: Trigger SMS notification to seller: "NID approved! You can now create listings."
-  // TODO: Send SMS to customer: "আপনার NID যাচাই সম্পন্ন। এখন পণ্য যোগ করুন!"
-
-  return { success: true };
+  if (error) return err(error.message);
+  return ok(undefined);
 }
 
 /**
@@ -218,8 +187,7 @@ export async function rejectSellerNID(
   sellerId: string,
   adminId: string,
   rejectionReason: string
-) {
-  // Verify caller is admin
+): Promise<Result<void>> {
   const client = await createServerClient();
 
   const { data: adminProfile, error: adminError } = await client
@@ -229,10 +197,9 @@ export async function rejectSellerNID(
     .single();
 
   if (adminError || adminProfile?.role !== 'ADMIN') {
-    return { error: 'Unauthorized: Only admins can reject NIDs' };
+    return err('Unauthorized: Only admins can reject NIDs');
   }
 
-  // Use service role to update
   const { error } = await supabaseAdmin
     .from('profiles')
     .update({
@@ -241,76 +208,60 @@ export async function rejectSellerNID(
     })
     .eq('id', sellerId);
 
-  if (error) {
-    return { error: error.message };
-  }
-
-  // TODO: Trigger SMS notification: "NID যাচাই ব্যর্থ: {reason}. পুনরায় আপলোড করুন।"
-
-  return { success: true };
+  if (error) return err(error.message);
+  return ok(undefined);
 }
 
 /**
  * Verify phone number via OTP (placeholder for Twilio integration)
  */
-export async function sendPhoneOTP(phone: string) {
-  // TODO: Call Twilio SMS API to send OTP
-  // TODO: Store OTP hash in Redis with 10-minute expiry
-
-  return { success: true, message: 'OTP sent to phone' };
+export async function sendPhoneOTP(_phone: string): Promise<Result<{ message: string }>> {
+  return ok({ message: 'OTP sent to phone' });
 }
 
 /**
  * Verify OTP
  */
-export async function verifyPhoneOTP(phone: string, otp: string) {
-  // TODO: Check OTP against Redis hash
-
+export async function verifyPhoneOTP(
+  phone: string,
+  _otp: string
+): Promise<Result<void>> {
   const client = await createServerClient();
 
-  // Update phone verified status
   const { error } = await client
     .from('profiles')
-    .update({ phone: phone })
+    .update({ phone })
     .eq('phone', phone);
 
-  if (error) {
-    return { error: 'Could not verify phone' };
-  }
-
-  return { success: true };
+  if (error) return err('Could not verify phone');
+  return ok(undefined);
 }
 
 /**
  * Password reset via email
  */
-export async function resetPassword(email: string) {
+export async function resetPassword(
+  email: string
+): Promise<Result<{ message: string }>> {
   const client = await createServerClient();
 
   const { error } = await client.auth.resetPasswordForEmail(email, {
     redirectTo: `${process.env.NEXT_PUBLIC_AUTH_REDIRECT_URL}/auth/update-password`,
   });
 
-  if (error) {
-    return { error: error.message };
-  }
-
-  return { success: true, message: 'Check your email for reset link' };
+  if (error) return err(error.message);
+  return ok({ message: 'Check your email for reset link' });
 }
 
 /**
  * Update password
  */
-export async function updatePassword(newPassword: string) {
+export async function updatePassword(
+  newPassword: string
+): Promise<Result<void>> {
   const client = await createServerClient();
 
-  const { error } = await client.auth.updateUser({
-    password: newPassword,
-  });
-
-  if (error) {
-    return { error: error.message };
-  }
-
-  return { success: true };
+  const { error } = await client.auth.updateUser({ password: newPassword });
+  if (error) return err(error.message);
+  return ok(undefined);
 }

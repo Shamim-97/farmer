@@ -1,31 +1,35 @@
+import { cache } from 'react';
 import { createServerClient } from '@/lib/supabase/server';
+import { isPlaceholderEnv } from '@/lib/env';
 import { UserRole, UserProfile, NIDStatus } from '@/lib/types/auth';
 
-/**
- * Get current authenticated user's profile
- */
-export async function getCurrentUserProfile(): Promise<UserProfile | null> {
-  const client = await createServerClient();
+// React-cache scopes the result to a single render tree, so layout +
+// page + nested server components share one round-trip per request.
+export const getCurrentUserProfile = cache(
+  async (): Promise<UserProfile | null> => {
+    if (isPlaceholderEnv()) return null;
+    const client = await createServerClient();
 
-  const {
-    data: { user },
-  } = await client.auth.getUser();
+    const {
+      data: { user },
+    } = await client.auth.getUser();
 
-  if (!user) return null;
+    if (!user) return null;
 
-  const { data, error } = await client
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single();
+    const { data, error } = await client
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
 
-  if (error) {
-    console.error('Error fetching user profile:', error);
-    return null;
+    if (error) {
+      console.error('Error fetching user profile:', error);
+      return null;
+    }
+
+    return data as UserProfile;
   }
-
-  return data as UserProfile;
-}
+);
 
 /**
  * Check if current user has a specific role
